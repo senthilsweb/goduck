@@ -146,10 +146,6 @@ func getEntities(c *gin.Context) {
 		columns = "*"
 	}
 
-	// Pagination
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-
 	// Sorting
 	var orderBy string
 	orderParam, hasOrderParam := c.GetQuery("order")
@@ -157,8 +153,8 @@ func getEntities(c *gin.Context) {
 		orderBy = orderParam
 	}
 
-	// Construct the base query
-	baseQuery := fmt.Sprintf("SELECT %s FROM %s", columns, entityType)
+	// Construct the base query for total count
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", entityType)
 
 	// Parse where conditions from query parameters
 	var whereConditions []string
@@ -196,6 +192,26 @@ func getEntities(c *gin.Context) {
 			}
 		}
 	}
+
+	// Add WHERE clause if conditions are present
+	if len(whereConditions) > 0 {
+		countQuery = fmt.Sprintf("%s WHERE %s", countQuery, strings.Join(whereConditions, " OR "))
+	}
+
+	// Execute the count query
+	var totalCount int
+	err := db.QueryRow(countQuery).Scan(&totalCount)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Pagination
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	// Construct the base query for data retrieval
+	baseQuery := fmt.Sprintf("SELECT %s FROM %s", columns, entityType)
 
 	// Add WHERE clause if conditions are present
 	if len(whereConditions) > 0 {
@@ -246,7 +262,7 @@ func getEntities(c *gin.Context) {
 
 	// Construct the response object with additional information
 	response := gin.H{
-		"total_rows": len(entities),
+		"total_rows": totalCount, // Updated to use the total count from the count query
 		"limit":      limit,
 		"offset":     offset,
 		"data":       entities,
@@ -309,6 +325,69 @@ func deleteEntity(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Entity deleted successfully"})
 }
 
+func executeQuery(query string) ([]map[string]interface{}, error) {
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columnNames, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+	for rows.Next() {
+		entity := make(map[string]interface{})
+		values := make([]interface{}, len(columnNames))
+		valuePointers := make([]interface{}, len(columnNames))
+		for i := range columnNames {
+			valuePointers[i] = &values[i]
+		}
+
+		err := rows.Scan(valuePointers...)
+		if err != nil {
+			return nil, err
+		}
+
+		for i, colName := range columnNames {
+			entity[colName] = values[i]
+		}
+		result = append(result, entity)
+	}
+
+	return result, nil
+}
+
+func executeCustomQuery(c *gin.Context) {
+	var queryData struct {
+		Query string `json:"query" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&queryData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	results, err := executeQuery(queryData.Query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	response := gin.H{
+		"total_rows": len(results),
+		"limit":      len(results), // This might not be applicable for custom queries, adjust as needed
+		"offset":     0,            // This might not be applicable for custom queries
+		"data":       results,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+
+
 
 func main() {
 	if err := initializeDB(); err != nil {
@@ -322,6 +401,9 @@ func main() {
 	r.GET("/:entity", getEntities)
 	r.PUT("/:entity/:id", updateEntity)
 	r.DELETE("/:entity/:id", deleteEntity)
+
+	r.POST("/execute-query", executeCustomQuery) // Route for executing custom queries
+
 
 	r.Run(":8080")
 }
