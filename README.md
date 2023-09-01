@@ -1,6 +1,6 @@
 # goduck
 
-Goduck is a dynamic REST API project inspired by Postgrest, designed to provide you with a seamless interaction with DuckDB, a high-performance analytical database. This documentation offers an overview of the project, its technical design features, environment setup instructions, and practical examples of endpoint usage.
+Goduck, a dynamic REST API project implemented in Golang, draws inspiration from the innovative approaches of RillData and the robust reliability of MotherDuck. Goduck offers REST API capabilities for tables and models, following a Micro ORM design pattern akin to PostgREST. This documentation provides an in-depth overview of the project's unique features, technical design, and practical examples for harnessing its powerful capabilities.
 
 ## Introduction
 
