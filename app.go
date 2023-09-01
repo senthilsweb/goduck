@@ -10,7 +10,7 @@ import (
 	"time"
 	"strings"
 
-
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/marcboeker/go-duckdb" // Update the import path
 )
@@ -28,7 +28,7 @@ type Entity struct {
 }
 
 func initializeDB() error {
-	connStr := "data.db"
+	connStr := "stage.db"
 	
 	_, err := os.Stat("data.db")
 	if os.IsNotExist(err) {
@@ -260,11 +260,28 @@ func getEntities(c *gin.Context) {
 		entities = append(entities, entity)
 	}
 
+
+	// Calculate the current page based on offset and limit
+	currentPage := (offset / limit) + 1
+
+	// Calculate the next offset
+	nextOffset := (currentPage * limit)+1
+
+	start := offset + 1
+	end := offset + limit
+	if end > totalCount {
+		end = totalCount
+	}
+
 	// Construct the response object with additional information
 	response := gin.H{
 		"total_rows": totalCount, // Updated to use the total count from the count query
 		"limit":      limit,
 		"offset":     offset,
+		"current_page": currentPage,
+		"next_offset": nextOffset, 
+		"start": start,
+		"end": end,
 		"data":       entities,
 	}
 
@@ -380,6 +397,10 @@ func executeCustomQuery(c *gin.Context) {
 		"total_rows": len(results),
 		"limit":      len(results), // This might not be applicable for custom queries, adjust as needed
 		"offset":     0,            // This might not be applicable for custom queries
+		"current_page": 1,
+		"next_offset": 1, 
+		"start": 1,
+		"end": len(results),
 		"data":       results,
 	}
 
@@ -396,6 +417,21 @@ func main() {
 	defer db.Close()
 
 	r := gin.Default()
+
+	/*r.Use(cors.New(cors.Config{
+		//AllowOrigins:     []string{"http://localhost:3000"},
+		//AllowMethods:     []string{"PUT", "PATCH"},
+		//AllowHeaders:     []string{"Origin"},
+		//ExposeHeaders:    []string{"Content-Length"},
+		//AllowCredentials: true,
+		//AllowOriginFunc: func(origin string) bool {
+		  //return origin == "https://github.com"
+		//},
+		MaxAge: 12 * time.Hour,
+	  }))
+	  */
+	  r.Use(cors.Default())
+
 
 	r.POST("/:entity", createEntity)
 	r.GET("/:entity", getEntities)
