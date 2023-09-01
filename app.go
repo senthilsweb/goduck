@@ -342,7 +342,7 @@ func deleteEntity(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Entity deleted successfully"})
 }
 
-func executeQuery(query string) ([]map[string]interface{}, error) {
+func executeSelectQuery(query string) ([]map[string]interface{}, error) {
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
@@ -377,34 +377,47 @@ func executeQuery(query string) ([]map[string]interface{}, error) {
 	return result, nil
 }
 
+func executeDDLQuery(query string) error {
+	println(query)
+    _, err := db.Exec(query)
+    return err
+}
+
 func executeCustomQuery(c *gin.Context) {
-	var queryData struct {
-		Query string `json:"query" binding:"required"`
-	}
+    var queryData struct {
+        Query string `json:"query" binding:"required"`
+    }
 
-	if err := c.ShouldBindJSON(&queryData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+    if err := c.ShouldBindJSON(&queryData); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
 
-	results, err := executeQuery(queryData.Query)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+    if strings.HasPrefix(strings.ToUpper(queryData.Query), "SELECT") {
+        // Handle SELECT query
+        results, err := executeSelectQuery(queryData.Query)
+        if err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+            return
+        }
 
-	response := gin.H{
-		"total_rows": len(results),
-		"limit":      len(results), // This might not be applicable for custom queries, adjust as needed
-		"offset":     0,            // This might not be applicable for custom queries
-		"current_page": 1,
-		"next_offset": 1, 
-		"start": 1,
-		"end": len(results),
-		"data":       results,
-	}
+        response := gin.H{
+            "total_rows": len(results),
+            "data":       results,
+        }
 
-	c.JSON(http.StatusOK, response)
+        c.JSON(http.StatusOK, response)
+    } else {
+        // Handle DDL query
+        err := executeDDLQuery(queryData.Query)
+        if err != nil {
+			println(err.Error())
+            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+            return
+        }
+
+        c.JSON(http.StatusOK, gin.H{"message": "Query executed successfully"})
+    }
 }
 
 
