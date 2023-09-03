@@ -8,6 +8,7 @@ lerna-debug.log*
 stage.db
 stage.db.wal
 dist
+.temp
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
