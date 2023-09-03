@@ -1,0 +1,14 @@
+[Unit]
+Description={{app}}, Server
+Wants=network.target
+After=network.target
+
+[Service]
+#EnvironmentFile=/opt/{{app}}/.env
+Type=simple
+Restart=always
+RestartSec=10
+ExecStart=/opt/{{app}}/{{app}}
+
+[Install]
+WantedBy=multi-user.target
