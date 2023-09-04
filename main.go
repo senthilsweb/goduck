@@ -7,9 +7,13 @@ import (
 	"io/fs"
 	"log"
 	"net/http" // Add this line to import the os package
+	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	_ "github.com/cznic/ql/driver"
+	"github.com/joho/godotenv"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -27,6 +31,24 @@ type Entity struct {
 	CreatedAt   time.Time `json:"created_at"`
 	ModifiedAt  time.Time `json:"modified_at"`
 	UpdateCount int       `json:"update_count"`
+}
+
+var (
+	configBaseURL string
+	dbConn        string
+)
+
+func init() {
+	// Load environment variables from .env
+	loadEnvVariables()
+
+}
+
+func loadEnvVariables() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
 }
 
 func initializeDB() error {
@@ -81,6 +103,42 @@ func bootup() error {
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func seedDuckDB(db *sql.DB, configBaseURL string) error {
+
+	// Print all environment variables for debugging
+	for _, env := range os.Environ() {
+		fmt.Println(env)
+	}
+
+	var tables []string
+	// Read and split the TABLES environment variable
+	tablesEnv := os.Getenv("SEED_TABLES_FROM_JSON_FILE")
+	if tablesEnv == "" {
+		log.Fatal("TABLES environment variable is not set")
+	}
+
+	tables = strings.Split(tablesEnv, ",")
+	errors := []string{}
+
+	for _, tablename := range tables {
+		query := fmt.Sprintf("CREATE TABLE %s AS SELECT * FROM read_json_auto('%s/%s.json');", tablename, configBaseURL, tablename)
+
+		_, err := db.Exec(query)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("Error executing query for %s: %s", tablename, err.Error()))
+			log.Printf("An error occurred while executing query for %s: %s\n", tablename, err.Error())
+		} else {
+			log.Printf("%s executed successfully.\n", query)
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("Failed to execute queries: %s", strings.Join(errors, ", "))
 	}
 
 	return nil
@@ -470,6 +528,9 @@ func listFilesRecursive(directory string) {
 var content embed.FS
 
 func main() {
+
+	loadEnvVariables()
+
 	if err := initializeDB(); err != nil {
 		log.Fatal(err)
 	}
@@ -478,6 +539,12 @@ func main() {
 	if err := bootup(); err != nil {
 		print("Install and load extensions failed")
 		log.Fatal(err)
+	}
+
+	// Call the seedDuckDB function to seed your DuckDB with data
+	configBaseURL = os.Getenv("CONFIG_BASE_URL")
+	if err := seedDuckDB(db, configBaseURL); err != nil {
+		log.Fatalf("Error seeding DuckDB: %v\n", err)
 	}
 
 	r := gin.Default()
@@ -509,10 +576,14 @@ func main() {
 		log.Fatalf("dist file server")
 		return
 	}
+	r.GET("/favicon.ico", func(c *gin.Context) {
+		c.FileFromFS("favicon.ico", http.FS(content))
+	})
+
 	r.StaticFS("/app", http.FS(dist))
 	r.StaticFS("/_nuxt", http.FS(content))
 
-	// Middleware to set the correct MIME type for JavaScript files
+	// Middleware to set the correct MIME type for specific file types
 	r.Use(func(c *gin.Context) {
 		path := c.Request.URL.Path
 		if strings.HasSuffix(path, ".js") {
@@ -523,11 +594,13 @@ func main() {
 			c.Header("Content-Type", "text/css")
 		} else if strings.HasSuffix(path, ".html") {
 			c.Header("Content-Type", "text/html")
+		} else if strings.HasSuffix(path, ".ico") {
+			c.Header("Content-Type", "image/x-icon")
 		} // Add more MIME types as needed
 
 		c.Next()
 	})
-
+	//Debug code to list all files in the embedded filesystem
 	listFilesRecursive("dist/_nuxt")
 
 	r.Run(":8080")
