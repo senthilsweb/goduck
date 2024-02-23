@@ -1,0 +1,22 @@
+duckdb:
+  conn: ""
+smtp:
+  host : "smtp.gmail.com"
+  port :  "587"
+  username : ""    
+  password : ""   
+  senderemail : ""
+  sendername  : ""
+  apiey      : ""
+  apitoken    : ""
+  apisecret   : ""
+
+queue:
+  broker : "redis"
+  host   :  "127.0.0.1"
+  uri   : "rediss://"
+  port   : "6379"
+  password   : ""
+  resultbackendhost : ""
+  resultbackendport : ""
+

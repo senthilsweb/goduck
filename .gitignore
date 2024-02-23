@@ -108,3 +108,4 @@ dist
 
 .output
 .env
+config.yml

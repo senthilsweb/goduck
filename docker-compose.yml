@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  go-app:
+    build: .
+    volumes:
+      - ./:/app # Mount your local source code directory to the container's /app directory
+    environment:
+      - GO111MODULE=on
+    command: bash -c "go build -o goduck_server-linux-x86_64 -v" # Build and run your Go application
+    ports:
+      - "8080:8080" # Map ports if your application serves HTTP requests
